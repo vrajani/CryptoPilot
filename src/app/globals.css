@@ -2,37 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
-}
-
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    --background: 200 67% 95%; /* Light Blue #EBF5FB */
+    --foreground: 210 10% 23%; /* Dark Slate Gray */
+
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 210 10% 23%; /* Dark Slate Gray */
+
+    --popover: 0 0% 100%; /* White */
+    --popover-foreground: 210 10% 23%; /* Dark Slate Gray */
+
+    --primary: 207 68% 53%; /* Saturated Blue #3498DB */
+    --primary-foreground: 0 0% 100%; /* White */
+
+    --secondary: 207 60% 85%; /* Lighter shade of primary */
+    --secondary-foreground: 207 68% 43%; /* Darker shade of primary for text on secondary */
+
+    --muted: 200 60% 90%; /* Very light blue */
+    --muted-foreground: 210 10% 45%; /* Medium Slate Gray for muted text */
+
+    --accent: 205 65% 44%; /* Vibrant Blue #2980B9 for CTAs */
+    --accent-foreground: 0 0% 100%; /* White for text on accent */
+
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
+
+    --border: 200 30% 88%; /* Light gray-blue border */
+    --input: 200 30% 88%; /* Light gray-blue for input borders */
+    --ring: 207 68% 53%; /* Primary blue for focus rings */
+
+    --radius: 0.5rem;
+
+    --chart-1: 207 68% 53%; /* primary */
+    --chart-2: 25 80% 60%; /* orange like color for ETH */
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
+    
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
@@ -42,31 +49,39 @@ body {
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --background: 210 10% 15%; /* Darker blue-gray for dark mode */
+    --foreground: 200 50% 90%; /* Light blue for text */
+
+    --card: 210 10% 20%; 
+    --card-foreground: 200 50% 90%;
+
+    --popover: 210 10% 20%;
+    --popover-foreground: 200 50% 90%;
+
+    --primary: 207 68% 58%; /* Slightly brighter primary for dark mode */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 207 50% 30%;
+    --secondary-foreground: 200 50% 90%;
+
+    --muted: 210 10% 25%;
+    --muted-foreground: 200 30% 70%;
+
+    --accent: 205 65% 54%; /* Brighter accent for dark mode */
+    --accent-foreground: 0 0% 100%;
+
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+
+    --border: 210 10% 30%;
+    --input: 210 10% 30%;
+    --ring: 207 68% 58%;
+
+    --chart-1: 207 68% 58%;
+    --chart-2: 25 70% 65%;
+    
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -84,5 +99,8 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+    /* Enable smooth font rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
