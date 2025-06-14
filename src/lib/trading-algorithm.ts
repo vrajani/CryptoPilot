@@ -1,6 +1,6 @@
 'use server';
 import { analyzePastWeekPriceMovement, type AnalyzePastWeekPriceMovementInput } from '@/ai/flows/analyze-past-week-price-movement';
-import { getMarketData, getHistoricalData, placeOrder, getPortfolio } from './robinhood';
+import { RobinhoodCrypto } from './robinhoodTrade';
 import type { CryptoSymbol, Portfolio, TradeLog, AssetHolding, DipSignal, MarketData, HistoricalDataPoint } from './types';
 import { MAX_INVESTMENT_USD, PROFIT_TARGET_PERCENTAGE, DIP_SCORE_THRESHOLD, BTC_SYMBOL, ETH_SYMBOL, CRYPTO_ASSETS } from './constants';
 
@@ -10,18 +10,24 @@ interface TradingActionResult {
   dipSignals: DipSignal[];
 }
 
+const rhCrypto = new RobinhoodCrypto({
+  privateKeyBase64: process.env.PRIVATE_KEY_BASE64 || '',
+  publicKeyBase64: process.env.PUBLIC_KEY_BASE64 || '',
+  apiKey: process.env.API_KEY || '',
+});
+
 export async function runTradingLogic(): Promise<TradingActionResult> {
   const logs: TradeLog[] = [];
   const dipSignals: DipSignal[] = [];
-  let portfolio = await getPortfolio();
-  const marketData = await getMarketData();
+  let portfolio = await rhCrypto.getHoldings();
+  const marketData = await getEstimatedPrice();
 
   logs.push({ timestamp: Date.now(), message: 'Algorithm run started.', type: 'info' });
 
   // Calculate current total crypto value
   let currentCryptoValueUSD = 0;
-  for (const holding of portfolio.holdings) {
-    const currentPrice = marketData[holding.assetId]?.price;
+  for (const holding of portfolio.results) {
+    const currentPrice = marketData[holding.asset_code]?.price;
     if (currentPrice) {
       currentCryptoValueUSD += holding.amount * currentPrice;
     }
@@ -29,7 +35,7 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
 
   // 1. Sell Logic (Check for 3% profit target)
   for (const asset of CRYPTO_ASSETS) {
-    const holding = portfolio.holdings.find(h => h.assetId === asset.id);
+    const holding = portfolio.results.find(h => h.asset_code === asset.id);
     const currentPriceData = marketData[asset.id];
 
     if (holding && holding.amount > 0 && currentPriceData && holding.targetSellPrice) {
