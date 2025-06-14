@@ -1,5 +1,6 @@
 'use server';
 import { analyzePastWeekPriceMovement, type AnalyzePastWeekPriceMovementInput } from '@/ai/flows/analyze-past-week-price-movement';
+import * as fs from 'fs/promises';
 import { Holding, RobinhoodCrypto } from './robinhoodTrade';
 import type { CryptoSymbol, TradeLog, DipSignal} from './types';
 import { MAX_INVESTMENT_USD, PROFIT_TARGET_PERCENTAGE, DIP_SCORE_THRESHOLD, BTC_SYMBOL, ETH_SYMBOL, CRYPTO_ASSETS } from './constants';
@@ -9,6 +10,8 @@ interface TradingActionResult {
   newPortfolio: Holding;
   dipSignals: DipSignal[];
 }
+
+const TRADING_LOG_FILE = '/src/trading_log.csv';
 
 const rhCrypto = new RobinhoodCrypto({
   privateKeyBase64: process.env.PRIVATE_KEY_BASE64 || '',
@@ -37,8 +40,24 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
   for (const asset of CRYPTO_ASSETS) {
     const holding = portfolio.results.find(h => h.asset_code === asset.id);
     const currentPrice = marketData.find(m => m.symbol === asset.usdSymbol)?.price;
+    let targetSellPrice = 0;
 
-    if (holding && holding.quantity_available_for_trading > 0 && currentPrice && currentPrice > 0 ) {  //todo: Replace 0 with actual buy price *1.03
+    // Read the trading log to find the last buy price for this asset
+    try {
+      const logContent = await fs.readFile(TRADING_LOG_FILE, 'utf-8');
+      const lines = logContent.trim().split('\n');
+      const lastBuyEntry = lines.find(line => {
+        const [action, , , , symbol] = line.split(',');
+        return action === 'buy' && symbol === asset.id;
+      });
+      if (lastBuyEntry) {
+        const [, buyPrice] = lastBuyEntry.split(',');
+        targetSellPrice = parseFloat(buyPrice) * (1 + PROFIT_TARGET_PERCENTAGE);
+      }
+    } catch (error) {
+      logs.push({ timestamp: Date.now(), message: `Error reading trading log for sell logic: ${(error as Error).message}`, type: 'error' });
+    }
+    if (holding && holding.quantity_available_for_trading > 0 && currentPrice && currentPrice > targetSellPrice ) { 
       try {
           const sellQuantity = holding.quantity_available_for_trading; // Sell all of this specific bought batch
           await rhCrypto.placeOrder({
@@ -140,6 +159,21 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
           });
           const targetSellPrice = parseFloat((currentPrice * (1 + PROFIT_TARGET_PERCENTAGE)).toFixed(2));
           
+          // Append to trading log
+          const logEntry = `buy,${currentPrice.toFixed(2)},n/a,${reco.assetId},${reco.assetId},${Date.now()}\n`; // order ID is mock, asset ID is duplicated for now
+          try {
+            // Read existing content
+            let existingContent = '';
+            try {
+              existingContent = await fs.readFile(TRADING_LOG_FILE, 'utf-8');
+            } catch (readError) {
+              // File doesn't exist, that's okay
+            }
+            // Write new entry at the beginning
+            await fs.writeFile(TRADING_LOG_FILE, logEntry + existingContent, 'utf-8');
+          } catch (writeError) {
+            logs.push({ timestamp: Date.now(), message: `Error writing to trading log: ${(writeError as Error).message}`, type: 'error' });
+          }
           // The mock `placeOrder` updates the portfolio. We need to update `targetSellPrice` on the new/updated holding.
           // This is tricky with mock. A real API would return order details, then you'd update your local state.
           // For mock, let's assume `placeOrder` correctly updates amounts and avgBuyPrice.
