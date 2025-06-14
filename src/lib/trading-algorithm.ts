@@ -51,7 +51,7 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
           });
           logs.push({
             timestamp: Date.now(),
-            message: `Profit target reached! Sold ${sellQuantity.toFixed(6)} ${asset.id} at $${currentPriceData.price.toFixed(2)}. Target: $${holding.targetSellPrice.toFixed(2)}`,
+            message: `Profit target reached! Sold ${sellQuantity.toFixed(6)} ${asset.id} at $${currentPrice.toFixed(2)}.`,
             type: 'sell',
           });
           // Portfolio is updated implicitly by placeOrder in mock, refetch for accuracy
@@ -71,14 +71,14 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
   }
 
   // 2. Buy Logic (Using GenAI for dip detection)
-  const currentBtcPrice = marketData.find(m => m.symbol === BTC_SYMBOL)?.price || 0;
-  const currentEthPrice = marketData.find(m => m.symbol === ETH_SYMBOL)?.price || 0;
+  const currentBtcMarketData = marketData.find(m => m.symbol === BTC_SYMBOL);
+  const currentEthMarketData = marketData.find(m => m.symbol === ETH_SYMBOL);
 
   const aiInput: AnalyzePastWeekPriceMovementInput = {
     // btcPrices: btcHistorical.slice(-7 * 24).map(p => p.price), // Assuming hourly, take last 7 days
     // ethPrices: ethHistorical.slice(-7 * 24).map(p => p.price),
-    currentBtcPrice: currentBtcPrice,
-    currentEthPrice: currentEthPrice,
+    currentBtcPrice: currentBtcMarketData?.price || 0,
+    currentEthPrice: currentEthMarketData?.price || 0,
   };
 
   try {
@@ -86,10 +86,10 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
     logs.push({ timestamp: Date.now(), message: `AI Analysis: BTC Dip ${aiResult.btcDipScore}, ETH Dip ${aiResult.ethDipScore}. Reco: ${aiResult.recommendation}`, type: 'ai' });
 
     if (aiResult.btcDipScore >= DIP_SCORE_THRESHOLD) {
-        dipSignals.push({ assetId: BTC_SYMBOL, priceAtDip: marketData.BTC.price, score: aiResult.btcDipScore, timestamp: marketData.BTC.timestamp});
+        dipSignals.push({ assetId: BTC_SYMBOL, priceAtDip: currentBtcMarketData?.price || 0, score: aiResult.btcDipScore, timestamp: Number(currentBtcMarketData?.timestamp) || 0});
     }
     if (aiResult.ethDipScore >= DIP_SCORE_THRESHOLD) {
-        dipSignals.push({ assetId: ETH_SYMBOL, priceAtDip: marketData.ETH.price, score: aiResult.ethDipScore, timestamp: marketData.ETH.timestamp});
+        dipSignals.push({ assetId: ETH_SYMBOL, priceAtDip: currentEthMarketData?.price || 0, score: aiResult.ethDipScore, timestamp: Number(currentEthMarketData?.timestamp) || 0});
     }
 
     // Parse recommendation (example: "Buy BTC 60%, ETH 40%" or "Hold" or "Buy BTC 100%")
@@ -115,23 +115,29 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
 
 
     let remainingInvestmentCapacity = MAX_INVESTMENT_USD - currentCryptoValueUSD;
-    let cashToInvestThisCycle = Math.min(portfolio.cashUSD, remainingInvestmentCapacity);
 
-    if (cashToInvestThisCycle > 10) { // Minimum $10 to invest
+    if (remainingInvestmentCapacity > 10) { // Minimum $10 to invest
       for (const reco of buyRecommendations) {
         const dipScore = reco.assetId === BTC_SYMBOL ? aiResult.btcDipScore : aiResult.ethDipScore;
         if (dipScore < DIP_SCORE_THRESHOLD) continue;
 
-        const currentPrice = marketData[reco.assetId]?.price;
+        const currentPrice = reco.assetId === BTC_SYMBOL ? currentBtcMarketData?.price: currentEthMarketData?.price;
         if (!currentPrice) continue;
 
-        const investmentAmountForAsset = cashToInvestThisCycle * reco.percentage;
+        const investmentAmountForAsset = remainingInvestmentCapacity * reco.percentage;
         if (investmentAmountForAsset < 1) continue; // Minimum $1 trade practically
 
         const quantityToBuy = investmentAmountForAsset / currentPrice;
 
         try {
-          await placeOrder(reco.assetId, 'buy', quantityToBuy);
+          await rhCrypto.placeOrder({
+            symbol: reco.assetId,
+            side: 'buy',
+            type: 'market',
+            market_order_config: {
+              asset_quantity: quantityToBuy,
+            },
+          });
           const targetSellPrice = parseFloat((currentPrice * (1 + PROFIT_TARGET_PERCENTAGE)).toFixed(2));
           
           // The mock `placeOrder` updates the portfolio. We need to update `targetSellPrice` on the new/updated holding.
@@ -141,10 +147,12 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
           // Simplification: if a holding for this asset already exists, this logic might need refinement for multiple buy lots.
           // For now, we'll update the targetSellPrice on the *entire* holding, using its new avgBuyPrice.
           
-          portfolio = await getPortfolio(); // Refetch to get updated avgBuyPrice
-          const updatedHolding = portfolio.holdings.find(h => h.assetId === reco.assetId);
+          portfolio = await rhCrypto.getHoldings(); // Refetch to get updated avgBuyPrice
+          const updatedHolding = portfolio.results.find(h => h.asset_code === reco.assetId);
           if (updatedHolding) {
-            updatedHolding.targetSellPrice = parseFloat((updatedHolding.avgBuyPrice * (1 + PROFIT_TARGET_PERCENTAGE)).toFixed(2));
+            
+            // todo: fix this by persisting. 
+            // updatedHolding.targetSellPrice = parseFloat((updatedHolding.avgBuyPrice * (1 + PROFIT_TARGET_PERCENTAGE)).toFixed(2));
             // This part is a hack due to mock limitations. A real system would track lots or update more granularly.
             // For the mock, we are essentially setting a new target for the entire updated holding.
             // A better mock would allow placeOrder to return the modified holding or accept a callback.
@@ -157,7 +165,6 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
             type: 'buy',
           });
           currentCryptoValueUSD += investmentAmountForAsset; // Update running total
-          cashToInvestThisCycle -= investmentAmountForAsset; // Update cash for this cycle
         } catch (error) {
           logs.push({
             timestamp: Date.now(),
@@ -167,7 +174,7 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
         }
       }
     } else if (buyRecommendations.length > 0) {
-        logs.push({ timestamp: Date.now(), message: `AI recommended buy, but insufficient funds or capacity ($${cashToInvestThisCycle.toFixed(2)} available).`, type: 'info' });
+        logs.push({ timestamp: Date.now(), message: `AI recommended buy, but insufficient funds or capacity.`, type: 'info' });
     }
 
   } catch (error) {
@@ -176,5 +183,5 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
   
   portfolio = await rhCrypto.getHoldings(); // Final fetch
   logs.push({ timestamp: Date.now(), message: 'Algorithm run finished.', type: 'info' });
-  return { logs, newPortfolio: portfolio, dipSignals };
+  return { logs, newPortfolio: portfolio.next ? portfolio.results[0] : portfolio.results[portfolio.results.length - 1], dipSignals };
 }

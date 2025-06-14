@@ -2,13 +2,17 @@
 "use client";
 import type React from 'react';
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import type { Portfolio, TradeLog, ChartDataItem, CryptoSymbol, MarketData, DipSignal, HistoricalDataPoint } from '@/lib/types';
+import type { Portfolio, TradeLog, ChartDataItem, MarketData, DipSignal, HistoricalDataPoint } from '@/lib/types';
 import { runTradingLogic } from '@/lib/trading-algorithm';
-import { getPortfolio as fetchPortfolioAPI, getMarketData as fetchMarketDataAPI, getHistoricalData as fetchHistoricalDataAPI, resetMockDB } from '@/lib/robinhood';
 import { ALGORITHM_INTERVAL_MS, BTC_SYMBOL, ETH_SYMBOL } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-
+import { Holding, RobinhoodCrypto } from '@/lib/robinhoodTrade';
+const rhCrypto = new RobinhoodCrypto({
+  privateKeyBase64: process.env.PRIVATE_KEY_BASE64 || '',
+  publicKeyBase64: process.env.PUBLIC_KEY_BASE64 || '',
+  apiKey: process.env.API_KEY || '',
+});
 interface AppContextType {
   portfolio: Portfolio | null;
   tradeLogs: TradeLog[];
@@ -74,15 +78,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const fetchInitialData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [fetchedPortfolio, fetchedMarketData, btcHistory, ethHistory] = await Promise.all([
-        fetchPortfolioAPI(),
-        fetchMarketDataAPI(),
-        fetchHistoricalDataAPI(BTC_SYMBOL),
-        fetchHistoricalDataAPI(ETH_SYMBOL),
+      const [fetchedPortfolio, fetchedMarketData] = await Promise.all([
+        rhCrypto.getHoldings(),
+        rhCrypto.getBestBidAsk()
       ]);
       setPortfolio(fetchedPortfolio);
       setMarketData(fetchedMarketData);
-      updateChartData(btcHistory, ethHistory, []);
       setTradeLogs([{ timestamp: Date.now(), message: "CryptoPilot initialized.", type: 'info' }]);
     } catch (error) {
       console.error("Error fetching initial data:", error);
@@ -106,13 +107,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setTradeLogs(prev => [...result.logs.reverse(), ...prev].slice(0, 100)); // Keep last 100 logs
       setDipSignals(prev => [...result.dipSignals, ...prev].slice(-10)); // keep recent dips
 
-      const [fetchedMarketData, btcHistory, ethHistory] = await Promise.all([
-         fetchMarketDataAPI(),
-         fetchHistoricalDataAPI(BTC_SYMBOL),
-         fetchHistoricalDataAPI(ETH_SYMBOL),
+      const [fetchedMarketData] = await Promise.all([
+         fetchMarketDataAPI()
       ]);
       setMarketData(fetchedMarketData);
-      updateChartData(btcHistory, ethHistory, result.dipSignals);
       
       result.logs.forEach(log => {
         if (log.type === 'buy' || log.type === 'sell') {
@@ -162,7 +160,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const resetSimulation = async () => {
     setIsLoading(true);
     setIsRunning(false);
-    await resetMockDB();
     await fetchInitialData(); // Refetch initial data after reset
     setTradeLogs([{ timestamp: Date.now(), message: "Simulation reset.", type: 'info' }]);
     setDipSignals([]);
