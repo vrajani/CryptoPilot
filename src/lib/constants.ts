@@ -3,12 +3,12 @@ export const PROFIT_TARGET_PERCENTAGE = 0.03; // 3%
 export const ALGORITHM_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 export const DIP_SCORE_THRESHOLD = 70; // Minimum dip score to consider buying
 
-export const BTC_SYMBOL = 'BTC-USD';
-export const ETH_SYMBOL = 'ETH-USD';
+export const BTC_SYMBOL = 'BTC';
+export const ETH_SYMBOL = 'ETH';
 
 export const CRYPTO_ASSETS = [
-  { id: BTC_SYMBOL, name: 'Bitcoin' },
-  { id: ETH_SYMBOL, name: 'Ethereum' },
+  { id: BTC_SYMBOL, usdSymbol: 'BTC-USD', name: 'Bitcoin' },
+  { id: ETH_SYMBOL, usdSymbol: 'ETH-USD', name: 'Ethereum' },
 ];
 
 // For mock historical data generation

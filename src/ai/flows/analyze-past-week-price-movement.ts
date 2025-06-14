@@ -11,8 +11,6 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const AnalyzePastWeekPriceMovementInputSchema = z.object({
-  btcPrices: z.array(z.number()).describe('An array of BTC prices from the past week.'),
-  ethPrices: z.array(z.number()).describe('An array of ETH prices from the past week.'),
   currentBtcPrice: z.number().describe('The current price of BTC.'),
   currentEthPrice: z.number().describe('The current price of ETH.'),
 });
@@ -33,17 +31,11 @@ const prompt = ai.definePrompt({
   name: 'analyzePastWeekPriceMovementPrompt',
   input: {schema: AnalyzePastWeekPriceMovementInputSchema},
   output: {schema: AnalyzePastWeekPriceMovementOutputSchema},
-  prompt: `You are a cryptocurrency trading expert. Analyze the provided BTC and ETH price data from the past week, along with their current prices, to identify potential dip buying opportunities.
+  prompt: `You are a cryptocurrency trading expert. Analyze the BTC and ETH price data from the past week, along with their current prices, to identify potential dip buying opportunities.
 
   Consider the historical price movements to determine if the current prices represent a significant dip compared to the recent past.  Calculate a "dip score" for both BTC and ETH, ranging from 0 to 100, where higher scores indicate a more favorable dip opportunity.
 
   Provide a recommendation on whether to buy BTC, ETH, or neither. If buying is recommended, suggest allocation percentages between BTC and ETH.
-
-  Past Week BTC Prices: {{{btcPrices}}}
-Current BTC Price: {{{currentBtcPrice}}}
-
-Past Week ETH Prices: {{{ethPrices}}}
-Current ETH Price: {{{currentEthPrice}}}
 
   Based on this data, provide the btcDipScore, ethDipScore, and recommendation in JSON format:
   {{output schema=AnalyzePastWeekPriceMovementOutputSchema}}

@@ -1,12 +1,12 @@
 'use server';
 import { analyzePastWeekPriceMovement, type AnalyzePastWeekPriceMovementInput } from '@/ai/flows/analyze-past-week-price-movement';
-import { RobinhoodCrypto } from './robinhoodTrade';
-import type { CryptoSymbol, Portfolio, TradeLog, AssetHolding, DipSignal, MarketData, HistoricalDataPoint } from './types';
+import { Holding, RobinhoodCrypto } from './robinhoodTrade';
+import type { CryptoSymbol, TradeLog, DipSignal} from './types';
 import { MAX_INVESTMENT_USD, PROFIT_TARGET_PERCENTAGE, DIP_SCORE_THRESHOLD, BTC_SYMBOL, ETH_SYMBOL, CRYPTO_ASSETS } from './constants';
 
 interface TradingActionResult {
   logs: TradeLog[];
-  newPortfolio: Portfolio;
+  newPortfolio: Holding;
   dipSignals: DipSignal[];
 }
 
@@ -20,39 +20,45 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
   const logs: TradeLog[] = [];
   const dipSignals: DipSignal[] = [];
   let portfolio = await rhCrypto.getHoldings();
-  const marketData = await getEstimatedPrice();
+  const marketData = (await rhCrypto.getBestBidAsk(CRYPTO_ASSETS.map(e => e.usdSymbol))).results;
 
   logs.push({ timestamp: Date.now(), message: 'Algorithm run started.', type: 'info' });
 
   // Calculate current total crypto value
   let currentCryptoValueUSD = 0;
   for (const holding of portfolio.results) {
-    const currentPrice = marketData[holding.asset_code]?.price;
+    const currentPrice = marketData.find(m => m.symbol === CRYPTO_ASSETS.find(c => c.id === holding.asset_code)?.usdSymbol)?.price;
     if (currentPrice) {
-      currentCryptoValueUSD += holding.amount * currentPrice;
+      currentCryptoValueUSD += holding.total_quantity * currentPrice;
     }
   }
 
   // 1. Sell Logic (Check for 3% profit target)
   for (const asset of CRYPTO_ASSETS) {
     const holding = portfolio.results.find(h => h.asset_code === asset.id);
-    const currentPriceData = marketData[asset.id];
+    const currentPrice = marketData.find(m => m.symbol === asset.usdSymbol)?.price;
 
-    if (holding && holding.amount > 0 && currentPriceData && holding.targetSellPrice) {
-      if (currentPriceData.price >= holding.targetSellPrice) {
-        try {
-          const sellQuantity = holding.amount; // Sell all of this specific bought batch
-          await placeOrder(asset.id, 'sell', sellQuantity);
+    if (holding && holding.quantity_available_for_trading > 0 && currentPrice && currentPrice > 0 ) {  //todo: Replace 0 with actual buy price *1.03
+      try {
+          const sellQuantity = holding.quantity_available_for_trading; // Sell all of this specific bought batch
+          await rhCrypto.placeOrder({
+            symbol: asset.id,
+            side: 'sell',
+            type: 'market',
+            market_order_config: {
+              asset_quantity: sellQuantity,
+            },
+          });
           logs.push({
             timestamp: Date.now(),
             message: `Profit target reached! Sold ${sellQuantity.toFixed(6)} ${asset.id} at $${currentPriceData.price.toFixed(2)}. Target: $${holding.targetSellPrice.toFixed(2)}`,
             type: 'sell',
           });
           // Portfolio is updated implicitly by placeOrder in mock, refetch for accuracy
-          portfolio = await getPortfolio(); 
-          currentCryptoValueUSD = portfolio.holdings.reduce((sum, h) => {
-            const price = marketData[h.assetId]?.price || 0;
-            return sum + (h.amount * price);
+          portfolio = await rhCrypto.getHoldings(); 
+          currentCryptoValueUSD = portfolio.results.reduce((sum, h) => {
+            const price = currentPrice || 0;
+            return sum + (h.quantity_available_for_trading * price);
           }, 0);
         } catch (error) {
           logs.push({
@@ -61,24 +67,18 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
             type: 'error',
           });
         }
-      }
     }
   }
 
   // 2. Buy Logic (Using GenAI for dip detection)
-  const btcHistorical = await getHistoricalData(BTC_SYMBOL);
-  const ethHistorical = await getHistoricalData(ETH_SYMBOL);
+  const currentBtcPrice = marketData.find(m => m.symbol === BTC_SYMBOL)?.price || 0;
+  const currentEthPrice = marketData.find(m => m.symbol === ETH_SYMBOL)?.price || 0;
 
-  if (!marketData.BTC || !marketData.ETH || btcHistorical.length === 0 || ethHistorical.length === 0) {
-    logs.push({ timestamp: Date.now(), message: 'Insufficient market/historical data to run AI analysis.', type: 'error' });
-    return { logs, newPortfolio: portfolio, dipSignals };
-  }
-  
   const aiInput: AnalyzePastWeekPriceMovementInput = {
-    btcPrices: btcHistorical.slice(-7 * 24).map(p => p.price), // Assuming hourly, take last 7 days
-    ethPrices: ethHistorical.slice(-7 * 24).map(p => p.price),
-    currentBtcPrice: marketData.BTC.price,
-    currentEthPrice: marketData.ETH.price,
+    // btcPrices: btcHistorical.slice(-7 * 24).map(p => p.price), // Assuming hourly, take last 7 days
+    // ethPrices: ethHistorical.slice(-7 * 24).map(p => p.price),
+    currentBtcPrice: currentBtcPrice,
+    currentEthPrice: currentEthPrice,
   };
 
   try {
@@ -174,7 +174,7 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
     logs.push({ timestamp: Date.now(), message: `Error in AI analysis: ${(error as Error).message}`, type: 'error' });
   }
   
-  portfolio = await getPortfolio(); // Final fetch
+  portfolio = await rhCrypto.getHoldings(); // Final fetch
   logs.push({ timestamp: Date.now(), message: 'Algorithm run finished.', type: 'info' });
   return { logs, newPortfolio: portfolio, dipSignals };
 }
