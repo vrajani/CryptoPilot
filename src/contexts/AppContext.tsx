@@ -98,6 +98,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [fetchInitialData]);
 
   const executeAlgorithm = useCallback(async () => {
+
+     console.log(process.env.PRIVATE_KEY_BASE64);
+     console.log(process.env.PUBLIC_KEY_BASE64);
+     console.log(process.env.API_KEY);
+     console.log(process.env.GEMINI_API_KEY);
     if (isLoading) return; // Don't run if initial data is still loading
     setIsLoading(true);
     setLastRunTime(new Date());
