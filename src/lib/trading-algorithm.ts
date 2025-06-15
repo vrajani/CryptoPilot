@@ -11,7 +11,7 @@ interface TradingActionResult {
   dipSignals: DipSignal[];
 }
 
-const TRADING_LOG_FILE = '/src/trading_log.csv';
+const TRADING_LOG_FILE = 'src/trading_log.csv';
 
 const rhCrypto = new RobinhoodCrypto({
   privateKeyBase64: process.env.PRIVATE_KEY_BASE64 || '',
