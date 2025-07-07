@@ -183,14 +183,6 @@ export async function runTradingLogic(): Promise<TradingActionResult> {
           
           portfolio = await rhCrypto.getHoldings(); // Refetch to get updated avgBuyPrice
           const updatedHolding = portfolio.results.find(h => h.asset_code === reco.assetId);
-          if (updatedHolding) {
-            
-            // todo: fix this by persisting. 
-            // updatedHolding.targetSellPrice = parseFloat((updatedHolding.avgBuyPrice * (1 + PROFIT_TARGET_PERCENTAGE)).toFixed(2));
-            // This part is a hack due to mock limitations. A real system would track lots or update more granularly.
-            // For the mock, we are essentially setting a new target for the entire updated holding.
-            // A better mock would allow placeOrder to return the modified holding or accept a callback.
-          }
 
 
           logs.push({
